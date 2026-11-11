@@ -865,3 +865,132 @@ check if the path is correct and if the daemon is running
 - **확인:** `app/index.html`을 열어 보니 Dockerfile 내용이 들어 있었음
 - **해결:** HTML로 수정 → `docker build`로 **재빌드** → 컨테이너 재생성
 - **배운 점:** `COPY`는 빌드 시점에 복사되므로 소스 수정 후 반드시 재빌드해야 함. 개발 중에는 바인드 마운트로 즉시 반영할 수 있음
+
+## 17. 포트 충돌 진단 및 해결
+
+### 17-1. 포트 충돌 재현
+`my-web`이 이미 8081을 사용 중인 상태에서, 같은 호스트 포트로 새 컨테이너 실행을 시도함.
+```bash
+PS> docker ps
+CONTAINER ID   IMAGE               COMMAND                  CREATED       STATUS                 PORTS                                     NAMES
+805253f79874   ubuntu              "sleep infinity"         2 hours ago   Up 2 hours                                                       vol-test2
+e65b98aaade2   nginx:1.27-alpine   "/docker-entrypoint.…"   3 hours ago   Up 3 hours             0.0.0.0:8082->80/tcp, [::]:8082->80/tcp   my-web-bind
+aad92117bf2c   b3e3cc013e8a        "/docker-entrypoint.…"   3 hours ago   Up 3 hours (healthy)   0.0.0.0:8081->80/tcp, [::]:8081->80/tcp   my-web
+
+PS> docker run -d --name port-test -p 8081:80 nginx:1.27-alpine
+7d4056bb3e79e2c5bac73c612f76a71fe124dd1b595e6964d06293f4ed324f3d
+docker: Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint port-test (...): Bind for 0.0.0.0:8081 failed: port is already allocated
+```
+→ 컨테이너는 생성(`Created`)되었지만, 호스트 8081 포트가 이미 사용 중이라 **시작에 실패**함
+
+### 17-2. 진단 ① 포트를 사용 중인 프로세스(PID) 확인
+```bash
+PS> netstat -ano | findstr :8081
+  TCP    0.0.0.0:8081           0.0.0.0:0              LISTENING       21984
+  TCP    127.0.0.1:8081         0.0.0.0:0              LISTENING       14976
+  TCP    [::]:8081              [::]:0                 LISTENING       21984
+  TCP    [::1]:8081             [::]:0                 LISTENING       14976
+
+PS> Get-NetTCPConnection -LocalPort 8081 -State Listen | Select-Object LocalAddress, LocalPort, State, OwningProcess
+
+LocalAddress LocalPort  State OwningProcess
+------------ ---------  ----- -------------
+::1               8081 Listen         14976
+::                8081 Listen         21984
+127.0.0.1         8081 Listen         14976
+```
+- `netstat -ano`: 모든 연결(`-a`)을 숫자 주소(`-n`)와 PID(`-o`)로 표시
+- `LISTENING` 상태의 맨 끝 숫자가 포트를 점유한 **PID**
+
+### 17-3. 진단 ② PID → 프로그램 이름 확인
+```bash
+PS> Get-Process -Id 21984, 14976
+
+Handles  NPM(K)    PM(K)      WS(K)     CPU(s)     Id  SI ProcessName
+-------  ------    -----      -----     ------     --  -- -----------
+   1080      55   185124     193312     128.77  21984   1 com.docker.backend
+    222      17     3080      11792       0.09  14976   1 wslrelay
+```
+- `com.docker.backend`: Docker Desktop 본체 (포트 매핑 처리)
+- `wslrelay`: WSL2 ↔ Windows localhost 연결 중계
+→ 포트를 점유한 것은 **Docker**임을 확인
+
+### 17-4. 진단 ③ 포트를 사용 중인 컨테이너 확인
+```bash
+PS> docker ps --filter "publish=8081"
+CONTAINER ID   IMAGE          COMMAND                  CREATED       STATUS                 PORTS                                     NAMES
+aad92117bf2c   b3e3cc013e8a   "/docker-entrypoint.…"   3 hours ago   Up 3 hours (healthy)   0.0.0.0:8081->80/tcp, [::]:8081->80/tcp   my-web
+```
+→ 원인: **`my-web` 컨테이너가 8081 사용 중**
+
+### 17-5. 해결 방법 A — 다른 호스트 포트로 변경
+```bash
+PS> docker ps -a --filter "name=port-test"
+CONTAINER ID   IMAGE               COMMAND                  CREATED         STATUS    PORTS     NAMES
+7d4056bb3e79   nginx:1.27-alpine   "/docker-entrypoint.…"   2 minutes ago   Created             port-test
+
+PS> docker rm port-test
+port-test
+
+PS> docker run -d --name port-test -p 8083:80 nginx:1.27-alpine
+c4ed76dc6321f9a4854670d8d9e2437dce5541f16364ff5ace8968d2bab367e1
+
+PS> curl.exe -I http://localhost:8083
+HTTP/1.1 200 OK
+Server: nginx/1.27.5
+Content-Type: text/html
+Content-Length: 615
+```
+→ 실패로 남은 `Created` 컨테이너를 삭제한 뒤, 비어 있는 **8083**으로 실행하여 성공
+
+### 17-6. 해결 방법 B — 포트를 점유한 쪽을 중지해 포트 해제
+```bash
+PS> docker stop my-web
+my-web
+
+PS> netstat -ano | findstr :8081
+  TCP    127.0.0.1:61462        127.0.0.1:8081         TIME_WAIT       0
+
+PS> docker rm -f port-test
+port-test
+
+PS> docker run -d --name port-test -p 8081:80 nginx:1.27-alpine
+7b7f61c19bd21ff3205944ece18f99fdf893d9d5658cdf008055a92849c85dc2
+
+PS> curl.exe -I http://localhost:8081
+HTTP/1.1 200 OK
+Server: nginx/1.27.5
+Content-Type: text/html
+Content-Length: 615
+```
+- `my-web` 중지 후 `LISTENING` 줄이 사라져 8081이 **해제**됨
+- 남은 `TIME_WAIT` 줄은 직전 curl 연결이 닫히며 잠시 남은 흔적(PID 0)으로, 포트를 점유하지 않음
+→ 해제된 8081로 새 컨테이너 실행 성공
+
+### 17-7. 원상 복구
+```bash
+PS> docker rm -f port-test
+port-test
+
+PS> docker start my-web
+my-web
+
+PS> docker ps
+CONTAINER ID   IMAGE               COMMAND                  CREATED       STATUS                            PORTS                                     NAMES
+805253f79874   ubuntu              "sleep infinity"         2 hours ago   Up 2 hours                                                                  vol-test2
+e65b98aaade2   nginx:1.27-alpine   "/docker-entrypoint.…"   3 hours ago   Up 3 hours                        0.0.0.0:8082->80/tcp, [::]:8082->80/tcp   my-web-bind
+aad92117bf2c   b3e3cc013e8a        "/docker-entrypoint.…"   3 hours ago   Up 5 seconds (health: starting)   0.0.0.0:8081->80/tcp, [::]:8081->80/tcp   my-web
+```
+
+### 17-8. 포트 충돌 대응 절차 요약
+| 단계 | 명령 (Windows PowerShell) | 목적 |
+|---|---|---|
+| 1. 증상 확인 | `docker run ... -p 8081:80` → `port is already allocated` | 충돌 발생 확인 |
+| 2. PID 찾기 | `netstat -ano \| findstr :8081` 또는 `Get-NetTCPConnection -LocalPort 8081` | 포트 점유 프로세스 번호 |
+| 3. 프로그램 확인 | `Get-Process -Id <PID>` | 어떤 프로그램인지 식별 |
+| 4. 컨테이너 확인 | `docker ps --filter "publish=8081"` | Docker라면 어느 컨테이너인지 |
+| 5-A. 포트 변경 | `docker run -p 8083:80 ...` | 다른 빈 포트 사용 |
+| 5-B. 포트 해제 | `docker stop <컨테이너>` | 점유 중인 컨테이너 중지 |
+| 5-C. 포트 해제 (Docker 외 프로그램) | `Stop-Process -Id <PID>` | 다른 프로그램이 점유한 경우 종료 (**Docker 프로세스에는 사용 금지**) |
+
+> 참고 (Linux/macOS): `sudo lsof -i :8081` 또는 `sudo ss -lntp | grep 8081`로 PID 확인 → `kill <PID>`로 종료
