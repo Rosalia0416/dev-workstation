@@ -144,3 +144,30 @@ PS C:\Users\rosakoo6480\dev-workstation> code .
 PS C:\Users\rosakoo6480\dev-workstation>
 ```
 
+### 6-3. 개인정보(이메일) 노출 및 히스토리 정리
+- **문제:** `git config --list` 결과를 README에 붙이면서 실제 이메일이 GitHub에 공개됨
+- **원인 가설:** 파일 내용뿐 아니라 이전 커밋 기록과 커밋 작성자 정보에도 이메일이 남아 있을 것
+- **확인:** README 수정 후에도 이전 커밋에는 원래 내용이 남아 있음. Git은 모든 버전을 기록하기 때문
+- **해결:**
+  1. README의 이메일을 `****`로 마스킹
+  2. 커밋 작성자 이메일을 GitHub noreply 주소로 변경
+  3. orphan 브랜치로 기록을 새로 만들고 강제 push로 GitHub 기록 교체
+
+```bash
+PS> git config --global user.email "****@users.noreply.github.com"
+PS> git checkout --orphan clean-main
+Switched to a new branch 'clean-main'
+PS> git add .
+PS> git commit -m "init: 개발 워크스테이션 구축 과제"
+[clean-main (root-commit) be574c6] init: 개발 워크스테이션 구축 과제
+PS> git branch -D main
+PS> git branch -m main
+PS> git push -f origin main
+ + 5d6b9c7...be574c6 main -> main (forced update)
+PS> git log --oneline
+be574c6 (HEAD -> main, origin/main, origin/HEAD) init: 개발 워크스테이션 구축 과제
+```
+- **배운 점:** Git은 로컬 버전 기록, GitHub는 원격 저장소. 한쪽만 고치면 기록이 남으므로 민감정보는 처음부터 마스킹해야 함
+
+
+
