@@ -454,3 +454,113 @@ CONTAINER ID   NAME      CPU %     MEM USAGE / LIMIT     MEM %     NET I/O      
 aad92117bf2c   my-web    0.00%     21.32MiB / 15.25GiB   0.14%     4.06kB / 3.35kB   0B / 12.3kB   25
 ```
 → 웹 서버 컨테이너가 메모리 약 21MiB로 가볍게 동작함을 확인
+
+
+## 11. 바인드 마운트
+
+### 11-1. 바인드 마운트로 컨테이너 실행
+```bash
+PS> docker run -d --name my-web-bind -p 8082:80 -v ${PWD}\app:/usr/share/nginx/html nginx:1.27-alpine
+Unable to find image 'nginx:1.27-alpine' locally
+1.27-alpine: Pulling from library/nginx
+Status: Downloaded newer image for nginx:1.27-alpine
+e65b98aaade2387db9dd363865f419305c0cf8b02256a04098f4563b68ba0a4a
+```
+- `-v 호스트경로:컨테이너경로` → 호스트의 `app` 폴더를 NGINX 웹 루트에 직접 연결
+- `${PWD}` = 현재 폴더의 절대 경로 (`C:\Users\...\dev-workstation`)
+
+### 11-2. 변경 전
+```bash
+PS> curl.exe -s http://localhost:8082 | Select-String "Version"
+  <p>Version: 1.0</p>
+```
+
+### 11-3. 호스트에서 파일 수정 (VS Code)
+`app/index.html`의 `Version: 1.0` → `Version: 2.0 (bind mount)`로 수정 후 저장 (재빌드 없음)
+
+### 11-4. 변경 후 (바인드 마운트 vs 이미지 COPY 비교)
+```bash
+PS> curl.exe -s http://localhost:8082 | Select-String "Version"
+  <p>Version: 2.0 (bind mount)</p>
+
+PS> curl.exe -s http://localhost:8081 | Select-String "Version"
+  <p>Version: 1.0</p>
+```
+
+![바인드 마운트 반영 화면](docs/images/bind-after.png)
+
+| 컨테이너 | 방식 | 호스트 파일 수정 후 |
+|---|---|---|
+| my-web (8081) | Dockerfile `COPY` (이미지에 복사본 포함) | `1.0` 그대로 → 재빌드 필요 |
+| my-web-bind (8082) | `-v` 바인드 마운트 (호스트 폴더 연결) | `2.0` 즉시 반영 |
+
+→ 바인드 마운트는 개발 중 소스 수정을 바로 확인할 때 유용함
+
+## 12. Docker 볼륨 영속성 검증
+
+### 12-1. 볼륨 생성
+```bash
+PS> docker volume create my-data
+my-data
+
+PS> docker volume ls
+DRIVER    VOLUME NAME
+local     my-data
+```
+
+### 12-2. 볼륨 연결 및 데이터 쓰기
+```bash
+PS> docker run -d --name vol-test -v my-data:/data ubuntu sleep infinity
+4254cec4b50b303c48c90fd9ae332fd11dac2c9ce21aa17bd18a2a5fd6c5eb86
+
+PS> docker exec vol-test sh -c "echo 'hello volume' > /data/hello.txt"
+PS> docker exec vol-test cat /data/hello.txt
+hello volume
+```
+
+### 12-3. 컨테이너 삭제
+```bash
+PS> docker rm -f vol-test
+vol-test
+
+PS> docker ps -a
+CONTAINER ID   IMAGE               COMMAND                  CREATED             STATUS                       PORTS                                     NAMES
+e65b98aaade2   nginx:1.27-alpine   "/docker-entrypoint.…"   20 minutes ago      Up 20 minutes                0.0.0.0:8082->80/tcp, [::]:8082->80/tcp   my-web-bind
+aad92117bf2c   b3e3cc013e8a        "/docker-entrypoint.…"   About an hour ago   Up About an hour (healthy)   0.0.0.0:8081->80/tcp, [::]:8081->80/tcp   my-web
+58c15431453b   ubuntu              "bash"                   3 hours ago         Exited (137) 2 hours ago                                               my-ubuntu
+7cb22f7b13b0   hello-world         "/hello"                 3 hours ago         Exited (0) 3 hours ago                                                 cranky_newton
+```
+→ `vol-test` 컨테이너가 완전히 삭제됨
+
+### 12-4. 새 컨테이너에 같은 볼륨 연결 → 데이터 확인
+```bash
+PS> docker run -d --name vol-test2 -v my-data:/data ubuntu sleep infinity
+805253f798740871d7009c06a0a7eab38a31dc5ce2b6e86816dd1a352d78bf1f
+
+PS> docker exec vol-test2 cat /data/hello.txt
+hello volume
+```
+→ **컨테이너를 삭제해도 볼륨의 데이터가 유지됨을 확인 (영속성)**
+
+### 12-5. 볼륨 정보
+```bash
+PS> docker volume inspect my-data
+[
+    {
+        "CreatedAt": "2026-11-11T08:04:02Z",
+        "Driver": "local",
+        "Labels": null,
+        "Mountpoint": "/var/lib/docker/volumes/my-data/_data",
+        "Name": "my-data",
+        "Options": null,
+        "Scope": "local"
+    }
+]
+```
+
+### 12-6. 정리: 컨테이너 / 바인드 마운트 / 볼륨
+| 구분 | 데이터 위치 | 컨테이너 삭제 시 | 용도 |
+|---|---|---|---|
+| 컨테이너 내부 | 컨테이너 쓰기 레이어 | **함께 삭제** | 임시 데이터 |
+| 바인드 마운트 | 호스트의 지정 경로 (`C:\...\app`) | 유지 (호스트 파일) | 개발 중 소스 실시간 반영 |
+| Docker 볼륨 | Docker가 관리하는 영역 (`/var/lib/docker/volumes/...`) | **유지** | DB 등 영속 데이터 |
