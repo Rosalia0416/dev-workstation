@@ -1,31 +1,122 @@
+# Dev Workstation 구축 과제
+
+## 1. 프로젝트 개요
+터미널, 파일 권한, Docker, Dockerfile, 포트 매핑, 바인드 마운트, Docker 볼륨, Git/GitHub를 직접 실습하여
+개발 워크스테이션을 구축하고, 수행 과정과 검증 결과를 이 문서에 기록한다.
+
+## 2. 실행 환경
+| 항목 | 내용 |
+|---|---|
+| OS | Microsoft Windows 11 Pro |
+| 쉘 / 터미널 | Windows PowerShell major  Minor  Build  Revision
+-----  -----  -----  --------
+5      1      26100  9711 / VS Code 통합 터미널 |
+| Docker | Docker Desktop, Docker version 29.9.3 (WSL2 기반) |
+| Git | git version 2.56.0.windows.4 |
+| 리눅스 실습 환경 | ubuntu 컨테이너 (Ubuntu 26.04.1 LTS) 내부 bash |
+
+## 3. 수행 항목 체크리스트
+- [x] 터미널 조작 (pwd, ls -la, cd, mkdir, cp, mv, rm, cat, touch)
+- [x] 권한 실습 (파일 1개 + 디렉토리 1개, 변경 전/후)
+- [x] Docker 설치 및 점검 (`docker --version`, `docker info`)
+- [x] Docker 기본 운영 명령 (images, ps, ps -a, stop, logs, stats)
+- [x] 컨테이너 실행 실습 (hello-world, ubuntu, attach/exec 비교)
+- [x] Dockerfile 커스텀 이미지 (NGINX 베이스)
+- [x] 포트 매핑 및 접속 증거 (curl + 브라우저)
+- [x] 바인드 마운트 (호스트 변경 전/후)
+- [x] Docker 볼륨 영속성 (컨테이너 삭제 전/후)
+- [x] Git 설정 (사용자 정보, 기본 브랜치 main)
+- [x] GitHub 연동 (VS Code 로그인, 원격 저장소 push)
+
+## 4. 검증 방법 요약
+| 항목 | 검증 명령 | 확인한 내용 | 결과 위치 |
+|---|---|---|---|
+| 터미널 조작 | `pwd`, `ls -la`, `cd`, `mkdir`, `cp`, `mv`, `rm`, `cat`, `touch` | 생성·복사·이동·이름변경·삭제 결과 | "터미널 조작 로그" 섹션 |
+| 권한 | `ls -l`, `ls -ld`, `chmod`, `stat` | 파일 644→755, 디렉토리 755→700 | "권한 실습" 섹션 |
+| Docker 설치 | `docker --version`, `docker info` | 버전, Server 정보 출력(데몬 동작) | "Docker 설치 및 점검" 섹션 |
+| 운영 명령 | `docker images`, `ps -a`, `stop`, `logs`, `stats` | 이미지·컨테이너 상태, 로그, 리소스 | "Docker 기본 운영 명령", "커스텀 이미지" 섹션 |
+| 컨테이너 실습 | `docker run`, `exec`, `attach` | hello-world, ubuntu 내부 명령, exec/attach 차이 | "컨테이너 실행 실습" 섹션 |
+| Dockerfile | `docker build`, `docker run` | 커스텀 이미지 빌드, `healthy` 상태 | "Dockerfile 기반 커스텀 이미지" 섹션 |
+| 포트 매핑 | `curl.exe http://localhost:8081`, 브라우저 | HTML 응답, 접속 화면 | [브라우저 스크린샷](docs/images/browser-8081.png) |
+| 바인드 마운트 | `-v ${PWD}\app:...`, curl 전/후 | 재빌드 없이 1.0→2.0 반영 | [바인드 마운트 스크린샷](docs/images/bind-after.png) |
+| 볼륨 | `docker volume create`, `rm -f`, 재연결 후 `cat` | 컨테이너 삭제 후에도 데이터 유지 | "Docker 볼륨 영속성 검증" 섹션 |
+| Git / GitHub | `git config --list`, `git remote -v`, `git log` | 사용자·브랜치 설정, 원격 연동 | [VS Code 로그인 스크린샷](docs/images/vscode-github-login.png) |
+
+## 5. 과제 목표 정리
+- **절대 경로 vs 상대 경로**: 절대 경로는 최상위(`/`, `C:\`)부터 적는 전체 경로(`/root/practice`)이고, 상대 경로는 현재 위치 기준(`practice`, `..`)이다. 홈 폴더에서 `git init`을 실행한 실수가 "현재 위치(`.`) 기준" 동작의 대표 사례였다.
+- **파일 권한 r/w/x와 755/644**: r=4, w=2, x=1을 소유자/그룹/기타 각각 더해서 표기한다. 755=`rwxr-xr-x`, 644=`rw-r--r--`.
+- **커스텀 이미지**: `nginx:1.27-alpine`을 베이스로 정적 콘텐츠를 `COPY`하고 `LABEL`, `EXPOSE`, `HEALTHCHECK`를 추가했다.
+- **포트 매핑이 필요한 이유**: 컨테이너는 격리된 네트워크에 있으므로 `-p 호스트:컨테이너`로 연결해야 외부(브라우저)에서 접근할 수 있다.
+- **Docker 볼륨**: Docker가 관리하는 저장 공간으로, 컨테이너를 삭제해도 데이터가 남는다(영속성).
+- **Git vs GitHub**: Git은 로컬에서 변경 이력을 관리하는 도구이고, GitHub는 Git 저장소를 원격으로 호스팅해 공유·협업하는 플랫폼이다.
+
+---
+
+# 상세 수행 기록
+
+```bash
+PS C:\Windows\system32> git --version
+```
+git version 2.56.0.windows.4
+```
+PS C:\Windows\system32> git config --global user.name "Rosalia0416"
+PS C:\Windows\system32> git config --global user.email "*******@*****.com"
+PS C:\Windows\system32> git confir --global init.defaultBranch main
+PS C:\Windows\system32> git config --list --global
+user.name=Rosalia0416## 0. 초기 Git 설정 로그
+
+```bash
 PS C:\Windows\system32> git --version
 git version 2.56.0.windows.4
+
 PS C:\Windows\system32> git config --global user.name "Rosalia0416"
-PS C:\Windows\system32> git config --global user.email "ro*****@**ver.com"
+PS C:\Windows\system32> git config --global user.email "*******@*****.com"
 PS C:\Windows\system32> git confir --global init.defaultBranch main
 git: 'confir' is not a git command. See 'git --help'.
 
 The most similar command is
         config
+
 PS C:\Windows\system32> git config --list
-diff.astextplain.textconv=astextplain
-filter.lfs.clean=git-lfs clean -- %f
-filter.lfs.smudge=git-lfs smudge -- %f
-filter.lfs.process=git-lfs filter-process
-filter.lfs.required=true
-http.sslbackend=schannel
-core.autocrlf=true
-core.fscache=true
-core.symlinks=false
-pull.rebase=false
-credential.helper=manager
-credential.https://dev.azure.com.usehttppath=true
+...
 init.defaultbranch=master
 user.name=Rosalia0416
-user.email=ros****@**ver.com
+user.email=*******@*****.com
+
 PS C:\Windows\system32> git config --global init.defaultBranch main
+PS C:\Windows\system32> git config --list --global
+user.name=Rosalia0416
+user.email=*******@users.noreply.github.com
+init.defaultbranch=main
+
 PS C:\Windows\system32> cd ~
-PS C:\Users\rosakoo6480> mkdir dev-workstation\app, dev-workstation\docs\images
+## 0-2. 저장소 위치 실수 및 복구 로그 (트러블슈팅 16-2 참고)
+
+```bash
+PS C:\Users\rosakoo6480> echo "# Dev Workstation" > README.md
+PS C:\Users\rosakoo6480> git init
+
+Initialized empty Git repository in C:/Users/rosakoo6480/.git/
+PS C:\Users\rosakoo6480> git add .
+warning: could not open directory 'AppData/Local/Application Data/': Permission denied
+warning: could not open directory 'Cookies/': Permission denied
+warning: could not open directory 'Documents/My Music/': Permission denied
+... (홈 폴더 전체 대상 Permission denied 경고 다수 — 개인 경로 포함으로 생략)
+fatal: adding files failed
+
+PS C:\Users\rosakoo6480> pwd
+Path
+----
+C:\Users\rosakoo6480
+
+PS C:\Users\rosakoo6480> Remove-Item -Recurse -Force .\.git
+PS C:\Users\rosakoo6480> git status
+fatal: not a git repository (or any of the parent directories): .git
+
+PS C:\Users\rosakoo6480> mkdir dev-workstation\app, dev-workstation\docs\images -Force
+PS C:\Users\rosakoo6480> cd dev-workstation
+```
+→ 홈 폴더에서 `git init`을 실행한 실수를 발견하고, `.git` 삭제 후 프로젝트 폴더에서 다시 시작함
 
 
     디렉터리: C:\Users\rosakoo6480\dev-workstation
@@ -33,7 +124,7 @@ PS C:\Users\rosakoo6480> mkdir dev-workstation\app, dev-workstation\docs\images
 
 Mode                 LastWriteTime         Length Name
 ----                 -------------         ------ ----
-d-----      2026-11-11  오전 11:30                app
+d-----      20216-11-11  오전 11:30                app
 
 
     디렉터리: C:\Users\rosakoo6480\dev-workstation\docs
@@ -259,7 +350,7 @@ root@58c15431453b:/# exit
 exit
 
 PS> docker ps
-(결과 붙여넣기 — my-ubuntu가 Up 상태)
+(결과  — my-ubuntu가 Up 상태)
 
 
 ### 9-3. attach로 진입 → exit (컨테이너 종료)
@@ -721,3 +812,56 @@ f43fd0c docs: 바인드 마운트 실습 기록
 | 위치 | 내 컴퓨터 (로컬) | 인터넷 (원격) |
 | 역할 | 변경 이력 기록 (`add`, `commit`, `log`) | 백업, 공유, 협업 (PR, Issue) |
 | 연결 | `git push`로 올리고 `git pull`로 받음 | |
+
+## 16. 트러블슈팅
+
+### 6-1. 기본 브랜치가 master로 남음
+- **문제:** `git config --list`에서 `init.defaultbranch=master`로 표시됨
+- **원인 가설:** 기본 브랜치 설정 명령이 제대로 실행되지 않았을 것
+- **확인:** 이전 출력에서 `git: 'confir' is not a git command` 오류 발견 (config 오타)
+- **해결:** `git config --global init.defaultBranch main`을 다시 실행한 뒤 `git config --list --global`로 `init.defaultbranch=main` 확인
+
+### 16-2. git add 시 Permission denied 대량 발생
+- **문제:** `git add .` 실행 시 `Permission denied` 경고가 다수 발생하고 `fatal: adding files failed`
+- **원인 가설:** Git 저장소가 의도하지 않은 위치에 생성되었을 것
+- **확인:** `git init` 출력 경로가 `C:/Users/rosakoo6480/.git/`(홈 폴더 전체)였음
+- **해결:** 홈 폴더의 `.git`만 삭제(`Remove-Item -Recurse -Force .\.git`) → `git status`로 저장소 해제 확인 → `dev-workstation`으로 이동해 `pwd` 확인 후 다시 `git init`
+- **배운 점:** `.`은 현재 위치 기준의 **상대 경로**이므로, 명령 실행 전에 `pwd`로 위치를 확인해야 함
+
+### 16-3. 개인정보(이메일) 노출 및 히스토리 정리
+- **문제:** `git config --list` 결과를 README에 붙이면서 실제 이메일이 GitHub에 공개됨
+- **원인 가설:** 파일을 고쳐도 이전 커밋 기록과 커밋 작성자 정보에 이메일이 남아 있을 것
+- **확인:** README 수정 후에도 이전 커밋에서 원래 내용이 조회됨 (Git은 모든 버전을 기록)
+- **해결:**
+  1. README의 이메일을 `****`로 마스킹
+  2. 커밋 작성자 이메일을 GitHub noreply 주소로 변경
+  3. orphan 브랜치로 기록을 새로 만든 뒤 `git push -f`로 GitHub 기록 교체
+```bash
+PS> git config --global user.email "****@users.noreply.github.com"
+PS> git checkout --orphan clean-main
+PS> git add .
+PS> git commit -m "init: 개발 워크스테이션 구축 과제"
+PS> git branch -D main
+PS> git branch -m main
+PS> git push -f origin main
+ + 5d6b9c7...be574c6 main -> main (forced update)
+```
+- **배운 점:** 민감정보는 처음부터 마스킹해야 하며, 노출 시 파일뿐 아니라 히스토리까지 정리해야 함
+
+### 16-4. Docker 데몬 연결 실패
+- **문제:** `docker info`, `docker run` 실행 시 아래 오류 발생
+```bash
+failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine;
+check if the path is correct and if the daemon is running
+```
+- **원인 가설:** Docker 클라이언트는 설치되었으나 데몬(엔진)이 실행되지 않았을 것
+- **확인:** `docker --version`은 성공(클라이언트 정상), `docker info`의 Server 부분에서 실패
+- **해결:** Docker Desktop을 실행하고 Engine running을 확인한 뒤 다시 실행하여 정상 동작
+- **배운 점:** Docker는 클라이언트(`docker` 명령)와 데몬(컨테이너를 실제로 실행하는 엔진)이 분리된 구조
+
+### 16-5. 웹 페이지 대신 Dockerfile 내용이 표시됨
+- **문제:** `localhost:8081` 접속 시 HTML 대신 Dockerfile 텍스트가 깨진 한글과 함께 표시됨
+- **원인 가설:** 이미지에 복사된 `index.html` 내용이 잘못되었을 것
+- **확인:** `app/index.html`을 열어 보니 Dockerfile 내용이 들어 있었음
+- **해결:** HTML로 수정 → `docker build`로 **재빌드** → 컨테이너 재생성
+- **배운 점:** `COPY`는 빌드 시점에 복사되므로 소스 수정 후 반드시 재빌드해야 함. 개발 중에는 바인드 마운트로 즉시 반영할 수 있음
