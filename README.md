@@ -260,7 +260,7 @@ exit
 
 PS> docker ps
 (결과 붙여넣기 — my-ubuntu가 Up 상태)
-```
+
 
 ### 9-3. attach로 진입 → exit (컨테이너 종료)
 ```bash
@@ -278,8 +278,11 @@ CONTAINER ID   IMAGE         COMMAND    CREATED         STATUS                  
 PS> docker stop my-ubuntu
 my-ubuntu
 PS> docker ps -a
-(결과 붙여넣기 — my-ubuntu가 Exited 상태)
+CONTAINER ID   IMAGE         COMMAND    CREATED          STATUS                       PORTS     NAMES
+58c15431453b   ubuntu        "bash"     11 minutes ago   Exited (137) 7 seconds ago             my-ubuntu
+7cb22f7b13b0   hello-world   "/hello"   17 minutes ago   Exited (0) 17 minutes ago              cranky_newton
 ```
+→ `docker stop`으로 강제 종료되어 `Exited (137)` 표시 (스스로 종료 시에는 0).
 
 ### 9-5. attach vs exec 정리
 | 방식 | 동작 | exit 시 결과 |
@@ -290,3 +293,28 @@ PS> docker ps -a
 - 컨테이너는 **주 프로세스가 살아 있는 동안만** 실행됨
 - attach 상태에서 종료하지 않고 빠져나오려면 `Ctrl+P` → `Ctrl+Q`
 - 운영 중인 컨테이너를 점검할 때는 컨테이너를 멈추지 않는 `exec`가 안전함
+
+PS C:\Users\rosakoo6480\dev-workstation> docker start my-ubuntu
+my-ubuntu
+PS C:\Users\rosakoo6480\dev-workstation> docker exec -it my-ubuntu bash
+root@58c15431453b:/# exit
+exit
+
+What's next:
+    Try Docker Debug for seamless, persistent debugging tools in any container or image → docker debug my-ubuntu
+    Learn more at https://docs.docker.com/go/debug-cli/
+PS C:\Users\rosakoo6480\dev-workstation> docker ps
+CONTAINER ID   IMAGE     COMMAND   CREATED          STATUS          PORTS     NAMES
+58c15431453b   ubuntu    "bash"    10 minutes ago   Up 16 seconds             my-ubuntu
+PS C:\Users\rosakoo6480\dev-workstation>
+
+
+PS C:\Users\rosakoo6480\dev-workstation> docker ps -a
+CONTAINER ID   IMAGE         COMMAND    CREATED          STATUS                       PORTS     NAMES
+58c15431453b   ubuntu        "bash"     11 minutes ago   Exited (137) 7 seconds ago             my-ubuntu
+7cb22f7b13b0   hello-world   "/hello"   17 minutes ago   Exited (0) 17 minutes ago              cranky_newton
+PS C:\Users\rosakoo6480\dev-workstation>
+
+58c15431453b   ubuntu    "bash"    22 minutes ago   Up 25 seconds             my-ubuntu
+```
+→ exec로 연 bash만 종료되어 컨테이너는 Up 상태 유지.
