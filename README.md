@@ -690,3 +690,34 @@ root@de3ca5cf098c:~/practice# stat -c "%a %A %n" perm.txt perm_dir
 - **755** = 소유자 `rwx`(7) / 그룹 `r-x`(5) / 기타 `r-x`(5) → 소유자만 수정, 나머지는 읽기와 실행
 - **644** = 소유자 `rw-`(6) / 그룹 `r--`(4) / 기타 `r--`(4) → 소유자만 수정, 나머지는 읽기만
 - **700** = 소유자만 모든 권한, 그룹과 기타는 접근 불가
+
+
+## 15. GitHub 연동
+
+### 15-1. 원격 저장소 연결 및 push
+```bash
+PS> git remote -v
+origin  https://github.com/Rosalia0416/dev-workstation.git (fetch)
+origin  https://github.com/Rosalia0416/dev-workstation.git (push)
+
+PS> git log --oneline -5
+e374df7 (HEAD -> main, origin/main, origin/HEAD) docs: 터미널 조작 및 권한 실습 기록
+006cbaf docs: Docker 볼륨 영속성 검증
+f43fd0c docs: 바인드 마운트 실습 기록
+9b32f4e docs: 빌드 출력 추가 및 불필요 파일 삭제
+3eec2a2 chore: 잘못 생성된 app/Dockerfile 삭제
+```
+→ 로컬 `main`과 `origin/main`이 같은 커밋을 가리켜 GitHub 반영을 확인
+
+### 15-2. VS Code GitHub 로그인
+![VSCode GitHub 로그인](docs/images/vscode-github-login.png)
+
+→ VS Code 계정 메뉴에 `Rosalia0416 (GitHub)`가 표시되어 GitHub 로그인 연동을 확인
+
+### 15-3. Git과 GitHub의 역할 차이
+| 구분 | Git | GitHub |
+|---|---|---|
+| 정체 | 버전 관리 **프로그램** | Git 저장소를 호스팅하는 **웹 서비스** |
+| 위치 | 내 컴퓨터 (로컬) | 인터넷 (원격) |
+| 역할 | 변경 이력 기록 (`add`, `commit`, `log`) | 백업, 공유, 협업 (PR, Issue) |
+| 연결 | `git push`로 올리고 `git pull`로 받음 | |
