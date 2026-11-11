@@ -564,3 +564,129 @@ PS> docker volume inspect my-data
 | 컨테이너 내부 | 컨테이너 쓰기 레이어 | **함께 삭제** | 임시 데이터 |
 | 바인드 마운트 | 호스트의 지정 경로 (`C:\...\app`) | 유지 (호스트 파일) | 개발 중 소스 실시간 반영 |
 | Docker 볼륨 | Docker가 관리하는 영역 (`/var/lib/docker/volumes/...`) | **유지** | DB 등 영속 데이터 |
+
+## 13. 터미널 조작 로그
+
+> 실습 환경: ubuntu 컨테이너(`docker run -it --name practice ubuntu bash`) 내부의 bash
+
+### 13-1. 현재 위치 확인 / 목록 확인 (숨김 파일 포함)
+```bash
+root@de3ca5cf098c:/# cd ~
+root@de3ca5cf098c:~# pwd
+/root
+root@de3ca5cf098c:~# ls -la
+total 16
+drwx------ 2 root root 4096 Oct 25 10:26 .
+drwxr-xr-x 1 root root 4096 Nov 11 08:11 ..
+-rw-r--r-- 1 root root 3106 Apr 20  2026 .bashrc
+-rw-r--r-- 1 root root  132 Apr 20  2026 .profile
+```
+→ `-a` 옵션으로 `.`으로 시작하는 숨김 파일(`.bashrc`, `.profile`)까지 표시
+
+### 13-2. 디렉토리 생성 / 이동 (절대 경로 vs 상대 경로)
+```bash
+root@de3ca5cf098c:~# mkdir practice
+root@de3ca5cf098c:~# cd /root/practice      # 절대 경로
+root@de3ca5cf098c:~/practice# pwd
+/root/practice
+root@de3ca5cf098c:~/practice# cd ..           # 상대 경로 (상위 폴더)
+root@de3ca5cf098c:~# cd practice              # 상대 경로 (현재 위치 기준)
+```
+| 구분 | 의미 | 예시 |
+|---|---|---|
+| 절대 경로 | 최상위 `/`부터 시작하는 전체 경로. 현재 위치와 무관하게 항상 같은 곳 | `/root/practice` |
+| 상대 경로 | **현재 위치 기준** 경로. `.`=현재, `..`=상위 | `practice`, `..` |
+
+### 13-3. 빈 파일 생성 / 파일 내용 확인
+```bash
+root@de3ca5cf098c:~/practice# touch empty.txt
+root@de3ca5cf098c:~/practice# echo "hello linux" > hello.txt
+root@de3ca5cf098c:~/practice# ls -la
+total 12
+drwxr-xr-x 2 root root 4096 Nov 11 08:12 .
+drwx------ 1 root root 4096 Nov 11 08:11 ..
+-rw-r--r-- 1 root root    0 Nov 11 08:12 empty.txt
+-rw-r--r-- 1 root root   12 Nov 11 08:12 hello.txt
+
+PS> docker exec practice cat /root/practice/greeting.txt
+hello linux
+```
+→ `touch`로 만든 `empty.txt`는 크기 0 (빈 파일)
+
+### 13-4. 복사 / 이동 / 이름 변경
+```bash
+root@de3ca5cf098c:~/practice# cp hello.txt hello_copy.txt
+root@de3ca5cf098c:~/practice# mkdir backup
+root@de3ca5cf098c:~/practice# mv hello_copy.txt backup/
+root@de3ca5cf098c:~/practice# mv hello.txt greeting.txt
+root@de3ca5cf098c:~/practice# ls -la
+total 16
+drwxr-xr-x 3 root root 4096 Nov 11 08:13 .
+drwx------ 1 root root 4096 Nov 11 08:11 ..
+drwxr-xr-x 2 root root 4096 Nov 11 08:13 backup
+-rw-r--r-- 1 root root    0 Nov 11 08:12 empty.txt
+-rw-r--r-- 1 root root   12 Nov 11 08:12 greeting.txt
+root@de3ca5cf098c:~/practice# ls -la backup
+total 12
+drwxr-xr-x 2 root root 4096 Nov 11 08:13 .
+drwxr-xr-x 3 root root 4096 Nov 11 08:13 ..
+-rw-r--r-- 1 root root   12 Nov 11 08:12 hello_copy.txt
+```
+→ `mv`는 **다른 폴더로 옮기면 이동**, **같은 폴더에서 이름을 바꾸면 이름 변경**
+
+### 13-5. 삭제
+```bash
+root@de3ca5cf098c:~/practice# rm backup/hello_copy.txt
+root@de3ca5cf098c:~/practice# rmdir backup
+root@de3ca5cf098c:~/practice# ls -la
+total 12
+drwxr-xr-x 2 root root 4096 Nov 11 08:14 .
+drwx------ 1 root root 4096 Nov 11 08:11 ..
+-rw-r--r-- 1 root root    0 Nov 11 08:12 empty.txt
+-rw-r--r-- 1 root root   12 Nov 11 08:12 greeting.txt
+```
+
+## 14. 권한 실습
+
+### 14-1. 변경 전
+```bash
+root@de3ca5cf098c:~/practice# touch perm.txt
+root@de3ca5cf098c:~/practice# mkdir perm_dir
+root@de3ca5cf098c:~/practice# ls -l perm.txt
+-rw-r--r-- 1 root root 0 Nov 11 08:14 perm.txt
+root@de3ca5cf098c:~/practice# ls -ld perm_dir
+drwxr-xr-x 2 root root 4096 Nov 11 08:14 perm_dir
+```
+
+### 14-2. 권한 변경 및 변경 후
+```bash
+root@de3ca5cf098c:~/practice# chmod 755 perm.txt
+root@de3ca5cf098c:~/practice# chmod 700 perm_dir
+root@de3ca5cf098c:~/practice# ls -l perm.txt
+-rwxr-xr-x 1 root root 0 Nov 11 08:14 perm.txt
+root@de3ca5cf098c:~/practice# ls -ld perm_dir
+drwx------ 2 root root 4096 Nov 11 08:14 perm_dir
+root@de3ca5cf098c:~/practice# stat -c "%a %A %n" perm.txt perm_dir
+755 -rwxr-xr-x perm.txt
+700 drwx------ perm_dir
+```
+
+| 대상 | 변경 전 | 변경 후 |
+|---|---|---|
+| 파일 `perm.txt` | `644` `-rw-r--r--` | `755` `-rwxr-xr-x` |
+| 디렉토리 `perm_dir` | `755` `drwxr-xr-x` | `700` `drwx------` |
+
+### 14-3. 권한 해석 규칙
+- 맨 앞 1글자: 종류 (`-` 파일, `d` 디렉토리)
+- 나머지 9글자: **소유자(u) / 그룹(g) / 기타(o)** 각 3글자씩
+
+| 권한 | 숫자 | 파일에서 | 디렉토리에서 |
+|---|---|---|---|
+| `r` (read) | 4 | 내용 읽기 | 목록 보기 (`ls`) |
+| `w` (write) | 2 | 내용 수정 | 파일 생성/삭제 |
+| `x` (execute) | 1 | 실행 | 안으로 들어가기 (`cd`) |
+
+- 각 자리의 숫자를 더해서 표기: `rwx`=4+2+1=**7**, `r-x`=4+1=**5**, `rw-`=4+2=**6**, `r--`=**4**, `---`=**0**
+- **755** = 소유자 `rwx`(7) / 그룹 `r-x`(5) / 기타 `r-x`(5) → 소유자만 수정, 나머지는 읽기와 실행
+- **644** = 소유자 `rw-`(6) / 그룹 `r--`(4) / 기타 `r--`(4) → 소유자만 수정, 나머지는 읽기만
+- **700** = 소유자만 모든 권한, 그룹과 기타는 접근 불가
