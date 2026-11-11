@@ -360,7 +360,39 @@ HEALTHCHECK --interval=30s --timeout=3s \
 ### 10-5. 빌드
 ```bash
 PS> docker build -t my-web:1.0 .
-(빌드 출력 붙여넣기)
+(#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 571B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/nginx:1.27-alpine
+#2 DONE 0.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 59B done
+#4 DONE 0.0s
+
+#5 [1/2] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+#5 resolve docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 0.0s done
+#5 DONE 0.0s
+
+#6 [2/2] COPY app/ /usr/share/nginx/html/
+#6 CACHED
+
+#7 exporting to image
+#7 exporting layers done
+#7 exporting manifest sha256:9a1aa3353eb2b9c4602592d601ccbccd89d80675ae2b133d191d2f962cc67951 done
+#7 exporting config sha256:3e1e5ecf78bb0bfc48857fab58cf348a073dec63646261ad599f19a40aba23a9 done
+#7 exporting attestation manifest sha256:ce78dde97efb861b3efd63cbcf474f3bf023ab27e374a09b6eb75daa760952d0 0.0s done
+#7 exporting manifest list sha256:3626ba1fa6a99c1370f79711b0324d80e9ead2ee407be1662f5d84b1055095f3 0.0s done
+#7 naming to docker.io/library/my-web:1.0 done
+#7 unpacking to docker.io/library/my-web:1.0 done
+#7 DONE 0.1s
 
 PS> docker images
 IMAGE                ID             DISK USAGE   CONTENT SIZE   EXTRA
