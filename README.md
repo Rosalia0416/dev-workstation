@@ -171,3 +171,122 @@ be574c6 (HEAD -> main, origin/main, origin/HEAD) init: 개발 워크스테이션
 
 
 
+PS C:\Users\rosakoo6480\dev-workstation> docker run hello-world
+Unable to find image 'hello-world:latest' locally
+latest: Pulling from library/hello-world
+4f55086f7dd0: Pull complete
+d5e71e642bf5: Download complete
+Digest: sha256:c567b231f65614688711a75f31518a064258a51d442117a3e771a3a8fdba78ef
+Status: Downloaded newer image for hello-world:latest
+
+Hello from Docker!
+This message shows that your installation appears to be working correctly.
+
+To generate this message, Docker took the following steps:
+ 1. The Docker client contacted the Docker daemon.
+ 2. The Docker daemon pulled the "hello-world" image from the Docker Hub.
+    (amd64)
+ 3. The Docker daemon created a new container from that image which runs the
+    executable that produces the output you are currently reading.
+ 4. The Docker daemon streamed that output to the Docker client, which sent it
+    to your terminal.
+
+To try something more ambitious, you can run an Ubuntu container with:
+ $ docker run -it ubuntu bash
+
+Share images, automate workflows, and more with a free Docker ID:
+ https://hub.docker.com/
+
+For more examples and ideas, visit:
+ https://docs.docker.com/get-started/
+
+PS C:\Users\rosakoo6480\dev-workstation>
+
+## 8. Docker 기본 운영 명령
+
+### 8-1. 이미지 / 컨테이너 목록
+```bash
+PS> docker images
+IMAGE                ID             DISK USAGE   CONTENT SIZE   EXTRA
+hello-world:latest   c567b231f656       25.9kB         9.49kB    U
+
+PS> docker ps
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+
+PS> docker ps -a
+CONTAINER ID   IMAGE         COMMAND    CREATED         STATUS                     PORTS     NAMES
+7cb22f7b13b0   hello-world   "/hello"   5 minutes ago   Exited (0) 5 minutes ago             cranky_newton
+```
+→ `docker ps`는 실행 중인 컨테이너만, `docker ps -a`는 종료된 컨테이너까지 표시함.
+hello-world는 메시지 출력 후 바로 종료되므로 `ps -a`에만 나타남.
+
+## 9. 컨테이너 실행 실습
+
+### 9-1. ubuntu 컨테이너 실행 및 내부 명령
+```bash
+PS> docker run -it --name my-ubuntu ubuntu bash
+Unable to find image 'ubuntu:latest' locally
+latest: Pulling from library/ubuntu
+...
+Status: Downloaded newer image for ubuntu:latest
+root@58c15431453b:/# echo "Hello from container"
+Hello from container
+root@58c15431453b:/# cat /etc/os-release
+PRETTY_NAME="Ubuntu 26.04.1 LTS"
+NAME="Ubuntu"
+VERSION_ID="26.04"
+...
+root@58c15431453b:/# exit
+exit
+
+PS> docker ps -a
+CONTAINER ID   IMAGE         COMMAND    CREATED          STATUS                     PORTS     NAMES
+58c15431453b   ubuntu        "bash"     34 seconds ago   Exited (0) 7 seconds ago             my-ubuntu
+```
+→ 프롬프트가 `root@컨테이너ID:/#`로 바뀌어 컨테이너 내부에 진입했음을 확인.
+`exit` 후 컨테이너도 Exited 상태가 됨 (주 프로세스인 bash가 종료되었기 때문).
+
+### 9-2. exec로 진입 → exit (컨테이너 유지)
+```bash
+PS> docker start my-ubuntu
+my-ubuntu
+PS> docker exec -it my-ubuntu bash
+root@58c15431453b:/# ls
+bin  boot  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+root@58c15431453b:/# echo "exec test"
+exec test
+root@58c15431453b:/# exit
+exit
+
+PS> docker ps
+(결과 붙여넣기 — my-ubuntu가 Up 상태)
+```
+
+### 9-3. attach로 진입 → exit (컨테이너 종료)
+```bash
+PS> docker attach my-ubuntu
+root@58c15431453b:/# exit
+exit
+
+PS> docker ps -a
+CONTAINER ID   IMAGE         COMMAND    CREATED         STATUS                     PORTS     NAMES
+58c15431453b   ubuntu        "bash"     2 minutes ago   Exited (0) 3 seconds ago             my-ubuntu
+```
+
+### 9-4. 컨테이너 중지
+```bash
+PS> docker stop my-ubuntu
+my-ubuntu
+PS> docker ps -a
+(결과 붙여넣기 — my-ubuntu가 Exited 상태)
+```
+
+### 9-5. attach vs exec 정리
+| 방식 | 동작 | exit 시 결과 |
+|---|---|---|
+| `docker exec -it` | 실행 중인 컨테이너에 **새 bash 프로세스를 추가** 실행 | 추가한 bash만 종료 → **컨테이너 유지 (Up)** |
+| `docker attach` | 컨테이너의 **주 프로세스(PID 1, bash)**에 직접 연결 | 주 프로세스 종료 → **컨테이너 종료 (Exited)** |
+
+- 컨테이너는 **주 프로세스가 살아 있는 동안만** 실행됨
+- attach 상태에서 종료하지 않고 빠져나오려면 `Ctrl+P` → `Ctrl+Q`
+- 운영 중인 컨테이너를 점검할 때는 컨테이너를 멈추지 않는 `exec`가 안전함
